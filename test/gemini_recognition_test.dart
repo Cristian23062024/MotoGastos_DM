@@ -1,4 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:motogastos/models/expense_inputs.dart';
@@ -100,6 +104,109 @@ void main() {
         () => GeminiVisionRecognitionService.parseResponse(_envelope('no sé')),
         throwsA(isA<RecognitionException>()),
       );
+    });
+  });
+
+  group('GeminiVisionRecognitionService.recognize', () {
+    late File image;
+    final okBody = _envelope(jsonEncode({
+      'brand': 'Yamaha',
+      'model': 'FZ 150',
+      'category': 'Naked',
+      'engine_cc': 149,
+      'confidence': 0.9,
+    }));
+
+    setUp(() async {
+      final dir = await Directory.systemTemp.createTemp('moto');
+      image = File('${dir.path}/foto.jpg')..writeAsBytesSync([1, 2, 3]);
+    });
+
+    GeminiVisionRecognitionService serviceWith(MockClient client) =>
+        GeminiVisionRecognitionService(
+          client: client,
+          apiKey: 'test',
+          retryDelay: Duration.zero,
+        );
+
+    test('reintenta cuando Gemini responde 503', () async {
+      var calls = 0;
+      final client = MockClient((_) async {
+        calls++;
+        return calls < 3
+            ? http.Response('{"error":{"code":503}}', 503)
+            : http.Response(okBody, 200);
+      });
+      final moto = await serviceWith(client).recognize(image);
+      expect(moto.displayName, 'Yamaha FZ 150');
+      expect(calls, 3);
+    });
+
+    test('pasa al modelo de respaldo si el principal sigue saturado', () async {
+      final models = <String>[];
+      final client = MockClient((request) async {
+        final model = request.url.pathSegments.last.split(':').first;
+        models.add(model);
+        return model == 'gemini-flash-latest'
+            ? http.Response('{"error":{"code":503}}', 503)
+            : http.Response(okBody, 200);
+      });
+      await serviceWith(client).recognize(image);
+      expect(models, [
+        'gemini-flash-latest',
+        'gemini-flash-latest',
+        'gemini-flash-latest',
+        'gemini-flash-lite-latest',
+      ]);
+    });
+
+    test('si el modelo principal se cuelga, pasa al de respaldo', () async {
+      final models = <String>[];
+      final client = MockClient((request) async {
+        final model = request.url.pathSegments.last.split(':').first;
+        models.add(model);
+        if (model == 'gemini-flash-latest') {
+          await Future<void>.delayed(const Duration(seconds: 5));
+        }
+        return http.Response(okBody, 200);
+      });
+      final service = GeminiVisionRecognitionService(
+        client: client,
+        apiKey: 'test',
+        retryDelay: Duration.zero,
+        timeout: const Duration(milliseconds: 50),
+      );
+      final moto = await service.recognize(image);
+      expect(moto.brand, 'Yamaha');
+      expect(models, ['gemini-flash-latest', 'gemini-flash-lite-latest']);
+    });
+
+    test('no reintenta errores definitivos como 400', () async {
+      var calls = 0;
+      final client = MockClient((_) async {
+        calls++;
+        return http.Response('{"error":{"code":400}}', 400);
+      });
+      await expectLater(
+        serviceWith(client).recognize(image),
+        throwsA(isA<RecognitionException>()),
+      );
+      expect(calls, 1);
+    });
+
+    test('acepta confianza 0 si sí identificó una marca', () async {
+      final client = MockClient((_) async => http.Response(
+            _envelope(jsonEncode({
+              'brand': 'AKT',
+              'model': 'NKD 125',
+              'category': 'Naked',
+              'engine_cc': 125,
+              'confidence': 0,
+            })),
+            200,
+          ));
+      final moto = await serviceWith(client).recognize(image);
+      expect(moto.brand, 'AKT');
     });
   });
 }

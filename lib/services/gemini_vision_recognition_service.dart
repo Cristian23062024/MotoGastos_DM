@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/motorcycle.dart';
@@ -26,6 +27,17 @@ const String _model = String.fromEnvironment(
   // Alias que Google mantiene apuntando al Flash estable más reciente.
   defaultValue: 'gemini-flash-latest',
 );
+
+/// Modelo de respaldo cuando el principal sigue saturado (503) tras los
+/// reintentos. Vacío para desactivarlo.
+const String _fallbackModel = String.fromEnvironment(
+  'GEMINI_FALLBACK_MODEL',
+  defaultValue: 'gemini-flash-lite-latest',
+);
+
+/// Códigos que Gemini devuelve por saturación o fallos pasajeros: vale la
+/// pena reintentar en vez de mostrar el error de una vez.
+const Set<int> _retryableStatuses = {429, 500, 502, 503, 504};
 
 /// Esquema de salida estructurada: Gemini garantiza que la respuesta sea
 /// un JSON con exactamente estos campos, los mismos de `Motorcycle.fromJson`.
@@ -63,14 +75,31 @@ const Map<String, dynamic> _responseSchema = {
 class GeminiVisionRecognitionService implements MotorcycleRecognitionService {
   final Uri? _endpointOverride;
   final http.Client? _client;
+  final String _key;
+  /// Tiempo máximo de espera de cada solicitud.
   final Duration timeout;
+
+  /// Tiempo máximo de todo el reconocimiento, sumando reintentos y el
+  /// modelo de respaldo, para que el usuario no espere indefinidamente.
+  final Duration totalTimeout;
+
+  /// Intentos por modelo ante errores pasajeros (ver [_retryableStatuses]).
+  final int maxAttempts;
+
+  /// Espera base entre reintentos; se duplica en cada intento.
+  final Duration retryDelay;
 
   GeminiVisionRecognitionService({
     Uri? endpoint,
     http.Client? client,
-    this.timeout = const Duration(seconds: 40),
+    String? apiKey,
+    this.timeout = const Duration(seconds: 30),
+    this.totalTimeout = const Duration(seconds: 75),
+    this.maxAttempts = 3,
+    this.retryDelay = const Duration(seconds: 1),
   })  : _endpointOverride = endpoint,
-        _client = client;
+        _client = client,
+        _key = apiKey ?? _apiKey;
 
   /// true cuando hay una API key de Gemini configurada al compilar.
   static bool get isConfigured => _apiKey.isNotEmpty;
@@ -78,15 +107,23 @@ class GeminiVisionRecognitionService implements MotorcycleRecognitionService {
   /// Modelo que se usará (útil para mostrarlo en la interfaz).
   static String get modelName => _model;
 
-  Uri get _endpointFor => _endpointOverride ??
+  Uri _endpointFor(String model) =>
+      _endpointOverride ??
       Uri.parse(
         'https://generativelanguage.googleapis.com/v1beta/models/'
-        '$_model:generateContent',
+        '$model:generateContent',
       );
+
+  /// Modelo principal y, si es distinto, el de respaldo.
+  static List<String> get _models => [
+        _model,
+        if (_fallbackModel.isNotEmpty && _fallbackModel != _model)
+          _fallbackModel,
+      ];
 
   @override
   Future<Motorcycle> recognize(File imageFile) async {
-    if (!isConfigured) {
+    if (_key.isEmpty) {
       throw const RecognitionException(
         'Falta configurar GEMINI_API_KEY (--dart-define-from-file=env.json). '
         'Mientras tanto se usa el modo de demostración.',
@@ -116,24 +153,94 @@ class GeminiVisionRecognitionService implements MotorcycleRecognitionService {
       },
     });
 
-    http.Response response;
     final client = _client ?? http.Client();
     try {
-      response = await client
+      final response = await _postWithRetries(client, body);
+      return parseResponse(response.body);
+    } on RecognitionException catch (e) {
+      debugPrint('Gemini: ${e.message}\n${e.cause}');
+      rethrow;
+    } finally {
+      if (_client == null) client.close();
+    }
+  }
+
+  /// Envía la solicitud reintentando con espera exponencial ante errores
+  /// pasajeros, y pasa al modelo de respaldo si el principal sigue
+  /// saturado o se queda colgado (con alta demanda Gemini a veces no
+  /// responde nada en vez de devolver 503). Todo cabe en [totalTimeout].
+  /// Devuelve solo respuestas 200.
+  Future<http.Response> _postWithRetries(http.Client client, String body) async {
+    final deadline = DateTime.now().add(totalTimeout);
+    http.Response? last;
+    var timedOut = false;
+
+    for (final model in _models) {
+      for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+        final remaining = deadline.difference(DateTime.now());
+        if (remaining <= Duration.zero) break;
+        final attemptTimeout = remaining < timeout ? remaining : timeout;
+
+        try {
+          last = await _post(client, model, body, attemptTimeout);
+        } on TimeoutException {
+          debugPrint(
+            'Gemini $model intento $attempt/$maxAttempts: sin respuesta en '
+            '${attemptTimeout.inSeconds} s',
+          );
+          timedOut = true;
+          // Reintentar el mismo modelo colgado casi nunca funciona; se pasa
+          // directo al de respaldo.
+          break;
+        }
+
+        if (last.statusCode == 200) return last;
+        timedOut = false;
+        debugPrint(
+          'Gemini $model intento $attempt/$maxAttempts: '
+          '${last.statusCode} ${last.body}',
+        );
+        if (!_retryableStatuses.contains(last.statusCode)) {
+          throw RecognitionException(
+            _messageForStatus(last.statusCode, model),
+            last.body,
+          );
+        }
+        if (attempt < maxAttempts) {
+          await Future<void>.delayed(retryDelay * (1 << (attempt - 1)));
+        }
+      }
+    }
+
+    if (last == null || timedOut) {
+      throw const RecognitionException(
+        'Gemini está tardando demasiado en responder, probablemente por alta '
+        'demanda. Espera unos segundos y toca "Reintentar".',
+      );
+    }
+    throw RecognitionException(
+      _messageForStatus(last.statusCode, _model),
+      last.body,
+    );
+  }
+
+  Future<http.Response> _post(
+    http.Client client,
+    String model,
+    String body,
+    Duration attemptTimeout,
+  ) async {
+    try {
+      return await client
           .post(
-            _endpointFor,
+            _endpointFor(model),
             headers: {
-              'x-goog-api-key': _apiKey,
+              'x-goog-api-key': _key,
               'content-type': 'application/json',
             },
             body: body,
           )
-          .timeout(timeout);
-    } on TimeoutException {
-      throw const RecognitionException(
-        'El reconocimiento tardó demasiado. Verifica tu conexión e '
-        'inténtalo de nuevo.',
-      );
+          .timeout(attemptTimeout);
     } on SocketException {
       throw const RecognitionException(
         'No hay conexión a internet. El reconocimiento necesita datos o '
@@ -141,18 +248,7 @@ class GeminiVisionRecognitionService implements MotorcycleRecognitionService {
       );
     } on http.ClientException catch (e) {
       throw RecognitionException('Error de red: ${e.message}', e);
-    } finally {
-      if (_client == null) client.close();
     }
-
-    if (response.statusCode != 200) {
-      throw RecognitionException(
-        _messageForStatus(response.statusCode),
-        response.body,
-      );
-    }
-
-    return parseResponse(response.body);
   }
 
   /// Convierte el cuerpo de una respuesta exitosa de `generateContent` en
@@ -211,7 +307,9 @@ class GeminiVisionRecognitionService implements MotorcycleRecognitionService {
     }
 
     final moto = Motorcycle.fromJson(motoJson);
-    if (moto.confidence <= 0 || moto.brand == 'Sin moto') {
+    // Solo "Sin moto" significa que no hay moto: una confianza baja con una
+    // marca real sigue siendo una estimación útil que el usuario corrige.
+    if (moto.brand.toLowerCase() == 'sin moto') {
       throw RecognitionException(
         'No encontramos una moto en la foto. Encuádrala completa, con buena '
         'luz, y vuelve a intentarlo.',
@@ -221,7 +319,7 @@ class GeminiVisionRecognitionService implements MotorcycleRecognitionService {
     return moto;
   }
 
-  static String _messageForStatus(int status) {
+  static String _messageForStatus(int status, String model) {
     switch (status) {
       case 400:
         return 'Gemini no aceptó la solicitud (400). Revisa que GEMINI_API_KEY '
@@ -231,8 +329,11 @@ class GeminiVisionRecognitionService implements MotorcycleRecognitionService {
         return 'La API key de Gemini no tiene permiso ($status). Revisa '
             'GEMINI_API_KEY.';
       case 404:
-        return 'El modelo "$_model" no existe en Gemini (404). Revisa '
+        return 'El modelo "$model" no existe en Gemini (404). Revisa '
             'GEMINI_MODEL.';
+      case 503:
+        return 'Gemini está saturado en este momento (503). Espera unos '
+            'segundos y toca "Reintentar".';
       case 429:
         return 'Se alcanzó el límite de uso de Gemini (429). Espera un momento '
             'e inténtalo de nuevo.';

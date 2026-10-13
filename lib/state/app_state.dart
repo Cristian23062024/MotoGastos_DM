@@ -83,7 +83,8 @@ class AppState extends ChangeNotifier {
     } on RecognitionException catch (e) {
       status = RecognitionStatus.error;
       errorMessage = e.message;
-    } catch (_) {
+    } catch (e, stack) {
+      debugPrint('Error inesperado reconociendo la moto: $e\n$stack');
       status = RecognitionStatus.error;
       errorMessage = 'Ocurrió un error inesperado analizando la foto.';
     }
