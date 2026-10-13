@@ -15,7 +15,7 @@ paleta y tipografía (Space Grotesk + IBM Plex Sans).
 - Flutter estable reciente (`flutter --version`), con soporte para Android
   y/o iOS.
 - Un celular físico para probar la cámara (el emulador/simulador no tiene
-  cámara real; puedes usar "Elegir foto de la galería" para probar el
+  cámara real; se puede usar "Elegir foto de la galería" para probar el
   resto del flujo desde un emulador).
 
 ## 2. Generar el proyecto nativo (Android/iOS)
@@ -24,17 +24,13 @@ Este repositorio trae solo la capa `lib/` + `pubspec.yaml` (el código
 Dart). Los proyectos nativos de Android/iOS se generan con la herramienta
 de Flutter, para no arrastrar plantillas nativas ya desactualizadas:
 
+Clonar el repositorio:
+
 ```bash
-flutter create --platforms=android,ios --org com.tuempresa motogastos
+git clone https://github.com/Cristian23062024/MotoGastos_DM.git
 ```
 
-Luego copia dentro del proyecto generado:
-
-- este `lib/` (reemplazando el que trae por defecto),
-- este `pubspec.yaml` (o copia solo la sección `dependencies:`),
-- `analysis_options.yaml`, `.gitignore`, `env.json.example`.
-
-Y dentro del proyecto:
+Dentro del proyecto ejecutar:
 
 ```bash
 flutter pub get
@@ -59,8 +55,8 @@ flutter pub get
 <string>MotoGastos necesita acceso a tus fotos para elegir una imagen de tu moto.</string>
 ```
 
-(Revisa también las instrucciones de instalación de los paquetes `camera`
-e `image_picker` en pub.dev por si la versión que instales pide algo
+(Revisar también las instrucciones de instalación de los paquetes `camera`
+e `image_picker` en pub.dev por si la versión que instale pide algo
 adicional — cambian de vez en cuando.)
 
 ## 4. Configurar el reconocimiento por IA
@@ -73,9 +69,8 @@ km/galón del cálculo de gasolina. La API key **nunca se escribe en el
 código ni se empaqueta como asset** (eso la dejaría extraíble del
 .apk/.ipa instalado); se pasa en tiempo de compilación:
 
-1. Copia `env.json.example` a `env.json` (ya está en `.gitignore`, no se
-   sube al repo).
-2. Complétalo con tu API key de Gemini (créala en
+1. Copiar `env.json.example` a `env.json`
+2. Complétar con tu API key de Gemini (se la puede crear en 
    https://aistudio.google.com/apikey). `GEMINI_MODEL` es opcional; por
    defecto se usa `gemini-flash-latest`:
 
@@ -86,25 +81,25 @@ código ni se empaqueta como asset** (eso la dejaría extraíble del
    }
    ```
 
-   Si prefieres Claude, deja `GEMINI_API_KEY` vacío y llena
+   Si se prefiere Claude, dejar `GEMINI_API_KEY` vacío y llena
    `ANTHROPIC_API_KEY` y `ANTHROPIC_MODEL`. Gemini tiene prioridad cuando
    ambos están configurados.
 
-3. Corre o compila así:
+3. Correr o compilar así:
 
    ```bash
    flutter run --dart-define-from-file=env.json
    ```
 
-Si no configuras nada, la app funciona igual en **modo demostración**:
-usa un resultado simulado (`MockRecognitionService`) para que puedas
+Si no configura nada, la app funciona igual en **modo demostración**:
+usa un resultado simulado (`MockRecognitionService`) para que pueda
 probar todo el flujo — cámara, resultado, cálculo de gastos — sin
-depender de una API externa. Verás un aviso pequeño de "modo
+depender de una API externa. Verá un aviso pequeño de "modo
 demostración" mientras analiza.
 
 ### Para producción real
 
-No llames la API de visión directamente desde el celular en una versión
+No llamar la API de visión directamente desde el celular en una versión
 publicada: aunque `--dart-define` evita que la clave quede en texto
 plano dentro del código fuente, sigue siendo extraíble del binario
 compilado con suficiente esfuerzo. Lo correcto es poner un backend propio
@@ -112,8 +107,8 @@ compilado con suficiente esfuerzo. Lo correcto es poner un backend propio
 celular, guarde la API key del lado del servidor, y le devuelva el
 resultado a la app. `GeminiVisionRecognitionService`
 (`lib/services/gemini_vision_recognition_service.dart`) ya está aislado
-detrás de la interfaz `MotorcycleRecognitionService`, así que apuntar a
-tu backend es solo cambiar el `endpoint` que recibe esa clase.
+detrás de la interfaz `MotorcycleRecognitionService`, así que apuntar al
+backend es solo cambiar el `endpoint` que recibe esa clase.
 
 ## 5. Tarifas de Colombia usadas (2026)
 
@@ -147,27 +142,10 @@ lib/
   widgets/                Componentes reutilizables
 ```
 
-## 7. Qué falta / próximos pasos sugeridos
+## 7. Roadmap:
 
 - Backend propio para no exponer la API key (ver sección 4).
 - Guardar un historial de motos escaneadas (hoy cada "Escanear otra
   moto" empieza de cero).
 - Selección de ciudad para afinar el precio de la gasolina y el
   impuesto por municipio.
-- Tests automatizados (`flutter test`) para `ExpenseInputs` y las
-  tarifas — no se corrieron en este entorno porque no tiene el SDK de
-  Flutter instalado; ver nota abajo.
-
-## Nota sobre verificación
-
-Este código se escribió y revisó manualmente (imports, tipos, llaves
-balanceadas) pero **no se compiló** porque el entorno donde se generó no
-tiene el SDK de Flutter/Dart disponible. Antes de darlo por bueno, corre:
-
-```bash
-flutter pub get
-flutter analyze
-flutter run
-```
-
-y avísame si `flutter analyze` marca algo — lo corregimos.
