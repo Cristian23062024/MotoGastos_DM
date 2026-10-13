@@ -65,24 +65,30 @@ adicional — cambian de vez en cuando.)
 
 ## 4. Configurar el reconocimiento por IA
 
-El reconocimiento llama a la API de visión de Anthropic (Claude) con la
-foto tomada. La API key **nunca se escribe en el código ni se empaqueta
-como asset** (eso la dejaría extraíble del .apk/.ipa instalado); se pasa
-en tiempo de compilación:
+El reconocimiento envía la foto de la cámara a **Gemini** (Google AI) y
+recibe un JSON estructurado con marca, línea, categoría, cilindraje, año,
+peso, consumo (km/l), tipo de motor, uso y confianza. Cada dato se muestra
+en su tarjeta de la ficha técnica, y el consumo alimenta el rendimiento
+km/galón del cálculo de gasolina. La API key **nunca se escribe en el
+código ni se empaqueta como asset** (eso la dejaría extraíble del
+.apk/.ipa instalado); se pasa en tiempo de compilación:
 
 1. Copia `env.json.example` a `env.json` (ya está en `.gitignore`, no se
    sube al repo).
-2. Complétalo con tu API key y el id del modelo de Claude con visión que
-   quieras usar (revisa el vigente en
-   https://docs.claude.com/en/docs/about-claude/models, cambia con el
-   tiempo):
+2. Complétalo con tu API key de Gemini (créala en
+   https://aistudio.google.com/apikey). `GEMINI_MODEL` es opcional; por
+   defecto se usa `gemini-flash-latest`:
 
    ```json
    {
-     "ANTHROPIC_API_KEY": "sk-ant-...",
-     "ANTHROPIC_MODEL": "claude-sonnet-..."
+     "GEMINI_API_KEY": "AIza...",
+     "GEMINI_MODEL": "gemini-flash-latest"
    }
    ```
+
+   Si prefieres Claude, deja `GEMINI_API_KEY` vacío y llena
+   `ANTHROPIC_API_KEY` y `ANTHROPIC_MODEL`. Gemini tiene prioridad cuando
+   ambos están configurados.
 
 3. Corre o compila así:
 
@@ -104,8 +110,8 @@ plano dentro del código fuente, sigue siendo extraíble del binario
 compilado con suficiente esfuerzo. Lo correcto es poner un backend propio
 (aunque sea una función serverless pequeña) que reciba la foto del
 celular, guarde la API key del lado del servidor, y le devuelva el
-resultado a la app. `ClaudeVisionRecognitionService`
-(`lib/services/claude_vision_recognition_service.dart`) ya está aislado
+resultado a la app. `GeminiVisionRecognitionService`
+(`lib/services/gemini_vision_recognition_service.dart`) ya está aislado
 detrás de la interfaz `MotorcycleRecognitionService`, así que apuntar a
 tu backend es solo cambiar el `endpoint` que recibe esa clase.
 
@@ -135,7 +141,7 @@ lib/
   theme/                  Colores y tipografía
   models/                 Motorcycle, ExpenseInputs
   data/                   Tarifas Colombia 2026
-  services/               Reconocimiento (interfaz + Claude + mock)
+  services/               Reconocimiento (interfaz + Gemini + Claude + mock)
   state/                  AppState (estado compartido entre pantallas)
   screens/                Las 5 pantallas del flujo
   widgets/                Componentes reutilizables

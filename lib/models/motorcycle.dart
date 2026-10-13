@@ -8,6 +8,15 @@ class Motorcycle {
   final int? estimatedYear;
   final int? estimatedWeightKg;
 
+  /// Consumo promedio estimado en ciclo urbano, en km por litro.
+  final double? fuelEfficiencyKmL;
+
+  /// Tipo de motor, p. ej. "4 Tiempos", "2 Tiempos" o "Eléctrica".
+  final String? engineType;
+
+  /// Uso típico, p. ej. "Uso urbano", "Trabajo", "Aventura".
+  final String? usage;
+
   /// Confianza del reconocimiento, entre 0.0 y 1.0.
   final double confidence;
 
@@ -19,12 +28,25 @@ class Motorcycle {
     required this.confidence,
     this.estimatedYear,
     this.estimatedWeightKg,
+    this.fuelEfficiencyKmL,
+    this.engineType,
+    this.usage,
   });
+
+  /// Litros que tiene un galón estadounidense, la unidad de venta de la
+  /// gasolina en Colombia.
+  static const double litrosPorGalon = 3.785;
 
   String get displayName =>
       model.trim().isEmpty ? brand : '$brand $model'.trim();
 
   int get confidencePercent => (confidence.clamp(0, 1) * 100).round();
+
+  /// Rendimiento en km/galón derivado del consumo en km/L, o null si la IA
+  /// no lo estimó.
+  int? get kmPorGalon => fuelEfficiencyKmL == null || fuelEfficiencyKmL! <= 0
+      ? null
+      : (fuelEfficiencyKmL! * litrosPorGalon).round();
 
   Motorcycle copyWith({
     String? brand,
@@ -33,6 +55,9 @@ class Motorcycle {
     int? engineCc,
     int? estimatedYear,
     int? estimatedWeightKg,
+    double? fuelEfficiencyKmL,
+    String? engineType,
+    String? usage,
     double? confidence,
   }) {
     return Motorcycle(
@@ -42,6 +67,9 @@ class Motorcycle {
       engineCc: engineCc ?? this.engineCc,
       estimatedYear: estimatedYear ?? this.estimatedYear,
       estimatedWeightKg: estimatedWeightKg ?? this.estimatedWeightKg,
+      fuelEfficiencyKmL: fuelEfficiencyKmL ?? this.fuelEfficiencyKmL,
+      engineType: engineType ?? this.engineType,
+      usage: usage ?? this.usage,
       confidence: confidence ?? this.confidence,
     );
   }
@@ -51,16 +79,15 @@ class Motorcycle {
   /// algún campo, se usa un valor por defecto razonable en vez de fallar.
   factory Motorcycle.fromJson(Map<String, dynamic> json) {
     return Motorcycle(
-      brand: (json['brand'] as String?)?.trim().isNotEmpty == true
-          ? (json['brand'] as String).trim()
-          : 'Marca no identificada',
-      model: (json['model'] as String?)?.trim() ?? '',
-      category: (json['category'] as String?)?.trim().isNotEmpty == true
-          ? (json['category'] as String).trim()
-          : 'Moto',
+      brand: _asText(json['brand']) ?? 'Marca no identificada',
+      model: _asText(json['model']) ?? '',
+      category: _asText(json['category']) ?? 'Moto',
       engineCc: _asInt(json['engine_cc']) ?? 150,
       estimatedYear: _asInt(json['estimated_year']),
       estimatedWeightKg: _asInt(json['estimated_weight_kg']),
+      fuelEfficiencyKmL: _asDouble(json['fuel_efficiency_km_l']),
+      engineType: _asText(json['engine_type']),
+      usage: _asText(json['usage']),
       confidence: _asDouble(json['confidence']) ?? 0.5,
     );
   }
@@ -72,8 +99,17 @@ class Motorcycle {
         'engine_cc': engineCc,
         'estimated_year': estimatedYear,
         'estimated_weight_kg': estimatedWeightKg,
+        'fuel_efficiency_km_l': fuelEfficiencyKmL,
+        'engine_type': engineType,
+        'usage': usage,
         'confidence': confidence,
       };
+
+  static String? _asText(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
 
   static int? _asInt(Object? value) {
     if (value == null) return null;

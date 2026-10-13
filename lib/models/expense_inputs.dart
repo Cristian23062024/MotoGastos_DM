@@ -23,14 +23,16 @@ class ExpenseInputs {
   });
 
   /// Valores por defecto sugeridos para una moto recién reconocida, a
-  /// partir de las tarifas 2026 y su cilindraje.
+  /// partir de las tarifas 2026, su cilindraje y el consumo que haya
+  /// estimado la IA.
   factory ExpenseInputs.sugeridoPara(Motorcycle moto) {
     return ExpenseInputs(
       soat: soatAnualParaCc(moto.engineCc),
       tecnomecanica: ColombiaRates2026.tecnomecanicaDefault,
       impuesto: estimarImpuestoVehicular(moto.engineCc),
       kmAnual: ColombiaRates2026.kmAnualDefault,
-      rendimientoKmPorGalon: ColombiaRates2026.rendimientoKmPorGalonDefault,
+      rendimientoKmPorGalon:
+          moto.kmPorGalon ?? ColombiaRates2026.rendimientoKmPorGalonDefault,
       precioGalon: ColombiaRates2026.precioGalonDefault,
       mantenimiento: ColombiaRates2026.mantenimientoDefault,
     );

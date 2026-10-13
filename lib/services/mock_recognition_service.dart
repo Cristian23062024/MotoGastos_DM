@@ -20,6 +20,9 @@ class MockRecognitionService implements MotorcycleRecognitionService {
       engineCc: 149,
       estimatedYear: 2022,
       estimatedWeightKg: 127,
+      fuelEfficiencyKmL: 42,
+      engineType: '4 Tiempos',
+      usage: 'Uso urbano',
       confidence: 0.92,
     );
   }

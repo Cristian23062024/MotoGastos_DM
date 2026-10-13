@@ -4,9 +4,10 @@ import '../models/motorcycle.dart';
 
 /// Contrato para cualquier motor de reconocimiento de motos por foto.
 ///
-/// Hay dos implementaciones: [ClaudeVisionRecognitionService] (llama a una
-/// API de visión en la nube) y [MockRecognitionService] (respuesta
-/// simulada, para desarrollar sin conexión o sin una API key configurada).
+/// Hay tres implementaciones: [GeminiVisionRecognitionService] y
+/// [ClaudeVisionRecognitionService] (llaman a una API de visión en la nube)
+/// y [MockRecognitionService] (respuesta simulada, para desarrollar sin
+/// conexión o sin una API key configurada).
 /// Cambiar de una a otra no requiere tocar las pantallas: `AppState` decide
 /// cuál usar.
 abstract class MotorcycleRecognitionService {

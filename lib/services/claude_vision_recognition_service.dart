@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models/motorcycle.dart';
 import 'motorcycle_recognition_service.dart';
 import 'recognition_exception.dart';
+import 'recognition_prompt.dart';
 
 /// API key y modelo se pasan en tiempo de compilación, NUNCA quedan escritos
 /// en el código fuente ni empaquetados como asset (eso los dejaría
@@ -24,29 +25,6 @@ import 'recognition_exception.dart';
 /// para apuntar a ese backend simplemente cambiando [_endpoint].
 const String _apiKey = String.fromEnvironment('ANTHROPIC_API_KEY');
 const String _model = String.fromEnvironment('ANTHROPIC_MODEL');
-
-const String _promptTexto = '''
-Eres un experto en motocicletas que circulan en Colombia. Observa la foto
-y responde EXCLUSIVAMENTE con un objeto JSON (sin texto adicional, sin
-explicación, sin bloque de código Markdown) con esta forma exacta:
-
-{
-  "brand": "marca, por ejemplo Yamaha",
-  "model": "línea o referencia, por ejemplo FZ 150",
-  "category": "tipo de moto: Naked, Scooter, Enduro, Deportiva, Trabajo, etc.",
-  "engine_cc": 150,
-  "estimated_year": 2022,
-  "estimated_weight_kg": 127,
-  "confidence": 0.85
-}
-
-"engine_cc" es el cilindraje estimado en centímetros cúbicos (entero).
-"estimated_year" es el año aproximado de fabricación (entero, o null si de
-verdad no se puede estimar). "estimated_weight_kg" es el peso aproximado en
-kg (entero, o null). "confidence" es un número entre 0 y 1 que refleja qué
-tan seguro estás. Si no reconoces la moto con certeza, da tu mejor
-estimación razonada igual y baja "confidence" en vez de dejar campos vacíos.
-''';
 
 /// Reconocimiento real usando la API de mensajes de Anthropic (Claude) con
 /// una imagen adjunta. Requiere una API key con acceso a un modelo con
@@ -76,7 +54,7 @@ class ClaudeVisionRecognitionService implements MotorcycleRecognitionService {
 
     final bytes = await imageFile.readAsBytes();
     final base64Image = base64Encode(bytes);
-    final mediaType = _mediaTypeFor(imageFile.path);
+    final mediaType = imageMimeTypeFor(imageFile.path);
 
     final body = jsonEncode({
       'model': _model,
@@ -93,7 +71,7 @@ class ClaudeVisionRecognitionService implements MotorcycleRecognitionService {
                 'data': base64Image,
               },
             },
-            {'type': 'text', 'text': _promptTexto},
+            {'type': 'text', 'text': recognitionPrompt},
           ],
         },
       ],
@@ -161,7 +139,7 @@ class ClaudeVisionRecognitionService implements MotorcycleRecognitionService {
       );
     }
 
-    final motoJson = _extractJsonObject(text);
+    final motoJson = extractJsonObject(text);
     if (motoJson == null) {
       throw RecognitionException(
         'No se pudo interpretar la respuesta como los datos de una moto.',
@@ -170,29 +148,5 @@ class ClaudeVisionRecognitionService implements MotorcycleRecognitionService {
     }
 
     return Motorcycle.fromJson(motoJson);
-  }
-
-  /// El modelo a veces envuelve el JSON en una frase o en ```json ... ```
-  /// pese a la instrucción; esto busca el primer objeto `{ ... }` del texto
-  /// y lo decodifica, en vez de asumir que la respuesta es JSON puro.
-  Map<String, dynamic>? _extractJsonObject(String text) {
-    final start = text.indexOf('{');
-    final end = text.lastIndexOf('}');
-    if (start == -1 || end == -1 || end < start) return null;
-    final candidate = text.substring(start, end + 1);
-    try {
-      final decoded = jsonDecode(candidate);
-      return decoded is Map<String, dynamic> ? decoded : null;
-    } on FormatException {
-      return null;
-    }
-  }
-
-  String _mediaTypeFor(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.heic')) return 'image/heic';
-    return 'image/jpeg';
   }
 }

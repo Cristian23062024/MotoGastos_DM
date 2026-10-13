@@ -24,10 +24,7 @@ class MiniNumberField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11.5, color: AppColors.ink2),
-        ),
+        Text(label.toUpperCase(), style: AppText.labelCaps),
         const SizedBox(height: 4),
         Semantics(
           textField: true,
@@ -40,7 +37,7 @@ class MiniNumberField extends StatelessWidget {
               isDense: true,
               contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             ),
-            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+            style: AppText.labelMd.copyWith(fontWeight: FontWeight.w600),
             onChanged: (text) => onChanged(int.tryParse(text) ?? 0),
           ),
         ),

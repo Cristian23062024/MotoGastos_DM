@@ -15,7 +15,7 @@
 ///    (Pulzo / Infobae, con datos de la CREG).
 ///  - Mantenimiento preventivo: rango estimado por talleres y guías de
 ///    costos (SYM Colombia, "Costos reales de tener moto 2026").
-library colombia_rates_2026;
+library;
 
 /// Un rango de cilindraje y la tarifa anual de SOAT que le corresponde.
 class SoatBracket {

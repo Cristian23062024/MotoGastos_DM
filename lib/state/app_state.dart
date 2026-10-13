@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/expense_inputs.dart';
 import '../models/motorcycle.dart';
 import '../services/claude_vision_recognition_service.dart';
+import '../services/gemini_vision_recognition_service.dart';
 import '../services/mock_recognition_service.dart';
 import '../services/motorcycle_recognition_service.dart';
 import '../services/recognition_exception.dart';
@@ -17,17 +18,33 @@ enum RecognitionStatus { idle, analyzing, success, error }
 /// sin tener que pasarse datos manualmente entre rutas.
 class AppState extends ChangeNotifier {
   AppState({MotorcycleRecognitionService? service})
-      : recognitionService = service ??
-            (ClaudeVisionRecognitionService.isConfigured
-                ? ClaudeVisionRecognitionService()
-                : const MockRecognitionService());
+      : recognitionService = service ?? _defaultService();
+
+  /// Gemini tiene prioridad; si no hay GEMINI_API_KEY se intenta con
+  /// Claude, y si tampoco está configurado se usa la simulación.
+  static MotorcycleRecognitionService _defaultService() {
+    if (GeminiVisionRecognitionService.isConfigured) {
+      return GeminiVisionRecognitionService();
+    }
+    if (ClaudeVisionRecognitionService.isConfigured) {
+      return ClaudeVisionRecognitionService();
+    }
+    return const MockRecognitionService();
+  }
 
   final MotorcycleRecognitionService recognitionService;
 
   /// true si se está usando el reconocimiento simulado porque no hay
-  /// ANTHROPIC_API_KEY / ANTHROPIC_MODEL configurados. Las pantallas lo
-  /// usan para mostrar un aviso discreto de "modo demostración".
+  /// ninguna API key configurada. Las pantallas lo usan para mostrar un
+  /// aviso discreto de "modo demostración".
   bool get usingDemoRecognition => recognitionService is MockRecognitionService;
+
+  /// Nombre corto del motor de reconocimiento, para mostrar en la interfaz.
+  String get recognitionEngineName => switch (recognitionService) {
+        GeminiVisionRecognitionService() => 'Gemini Vision',
+        ClaudeVisionRecognitionService() => 'Claude Vision',
+        _ => 'Modo demo',
+      };
 
   File? capturedImage;
   Motorcycle? motorcycle;
@@ -74,16 +91,24 @@ class AppState extends ChangeNotifier {
   }
 
   /// El usuario corrigió los datos de la moto en la pantalla de resultado.
-  /// Si cambió el cilindraje, se recalculan el SOAT y el impuesto
-  /// sugeridos (dependen de él); el resto de los valores que ya haya
-  /// editado en la pantalla de gastos se conserva.
+  /// Se recalculan el SOAT y el impuesto sugeridos (dependen del
+  /// cilindraje) y, si cambió el consumo, el rendimiento de gasolina; el
+  /// resto de los valores que ya haya editado en la pantalla de gastos se
+  /// conserva.
   void updateMotorcycle(Motorcycle moto) {
+    final previous = motorcycle;
     motorcycle = moto;
     final suggested = ExpenseInputs.sugeridoPara(moto);
     final current = expenses;
     expenses = current == null
         ? suggested
-        : current.copyWith(soat: suggested.soat, impuesto: suggested.impuesto);
+        : current.copyWith(
+            soat: suggested.soat,
+            impuesto: suggested.impuesto,
+            rendimientoKmPorGalon: previous?.kmPorGalon != moto.kmPorGalon
+                ? suggested.rendimientoKmPorGalon
+                : null,
+          );
     notifyListeners();
   }
 

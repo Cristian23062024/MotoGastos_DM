@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/welcome_screen.dart';
@@ -12,11 +13,17 @@ class MotoGastosApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppState(),
-      child: MaterialApp(
-        title: 'MotoGastos',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        home: const WelcomeScreen(),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light.copyWith(
+          statusBarColor: Colors.transparent,
+          systemNavigationBarColor: AppColors.surface,
+        ),
+        child: MaterialApp(
+          title: 'MotoGastos',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.dark(),
+          home: const WelcomeScreen(),
+        ),
       ),
     );
   }
