@@ -25,3 +25,5 @@ env.json
 .idea/
 *.iml
 .vscode/
+
+design.md
