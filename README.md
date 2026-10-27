@@ -29,6 +29,11 @@ Clonar el repositorio:
 ```bash
 git clone https://github.com/Cristian23062024/MotoGastos_DM.git
 ```
+Crear proyecto y copiar los contenidos del repositorio:
+
+```bash
+flutter create --platforms=android,ios --org com.tuempresa motogastos
+```
 
 Dentro del proyecto ejecutar:
 
@@ -110,7 +115,33 @@ resultado a la app. `GeminiVisionRecognitionService`
 detrás de la interfaz `MotorcycleRecognitionService`, así que apuntar al
 backend es solo cambiar el `endpoint` que recibe esa clase.
 
-## 5. Tarifas de Colombia usadas (2026)
+## 5. Cuenta opcional y escaneos guardados (Supabase)
+
+Iniciar sesión es opcional (botón arriba a la derecha en Inicio):
+
+- **Sin cuenta**: solo se guarda el último escaneo, en el teléfono
+  (SharedPreferences). Cada escaneo nuevo reemplaza al anterior.
+- **Con cuenta**: cada escaneo se guarda en la tabla `scans` de Supabase y
+  aparece en "Mis escaneos". Al iniciar sesión, el escaneo hecho como
+  invitado se sube a la cuenta.
+
+Un escaneo se guarda al llegar a "Gastos Anuales" y se actualiza al
+terminar de editar valores. Se guardan la moto y los gastos, no la foto.
+
+Configuración:
+
+1. En Supabase → SQL Editor, ejecutar `supabase/schema.sql` (crea la
+   tabla y las políticas RLS: cada usuario solo ve sus escaneos).
+2. En Project Settings → API, copiar la URL y la anon/publishable key a
+   `env.json` como `SUPABASE_URL` y `SUPABASE_ANON_KEY`.
+3. Authentication → Sign In / Providers → Email: si "Confirm email" está
+   activo, al registrarse el usuario debe confirmar con el enlace del
+   correo antes de iniciar sesión.
+
+Sin esas dos claves la app no muestra el botón de iniciar sesión y
+funciona solo como invitado.
+
+## 6. Tarifas de Colombia usadas (2026)
 
 En `lib/data/colombia_rates_2026.dart`, con las fuentes en los
 comentarios del archivo. Resumen:
@@ -127,22 +158,23 @@ Son valores de referencia, no una cotización oficial — la app deja
 editar cada uno, y hay que revisarlos cada año porque cambian con
 decretos, la UVT y el mercado.
 
-## 6. Estructura del código
+## 7. Estructura del código
 
 ```
 lib/
   main.dart               Punto de entrada
   app.dart                MaterialApp + Provider
   theme/                  Colores y tipografía
-  models/                 Motorcycle, ExpenseInputs
+  models/                 Motorcycle, ExpenseInputs, SavedScan
   data/                   Tarifas Colombia 2026
   services/               Reconocimiento (interfaz + Gemini + Claude + mock)
-  state/                  AppState (estado compartido entre pantallas)
-  screens/                Las 5 pantallas del flujo
+  state/                  AppState (flujo) y AccountState (cuenta y escaneos)
+  screens/                Las 5 pantallas del flujo + login y Mis escaneos
   widgets/                Componentes reutilizables
+supabase/schema.sql       Tabla scans + RLS
 ```
 
-## 7. Roadmap:
+## 8. Roadmap:
 
 - Backend propio para no exponer la API key (ver sección 4).
 - Guardar un historial de motos escaneadas (hoy cada "Escanear otra

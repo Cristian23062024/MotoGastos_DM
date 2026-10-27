@@ -27,6 +27,12 @@ dependencies:
   # Tipografía (Space Grotesk + IBM Plex Sans, igual que el prototipo)
   google_fonts: ^8.2.1
 
+  # Cuenta opcional y escaneos guardados en la nube
+  supabase_flutter: ^2.18.3
+
+  # El único escaneo que se guarda en el dispositivo sin cuenta
+  shared_preferences: ^2.5.6
+
   cupertino_icons: ^1.0.8
 
 dev_dependencies:

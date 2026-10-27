@@ -15,6 +15,7 @@ web/
 linux/
 macos/
 windows/
+graphify-out/
 
 # Secretos: NUNCA subas tu API key
 env.json

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/expense_inputs.dart';
 import '../models/motorcycle.dart';
+import '../state/account_state.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency.dart';
@@ -10,6 +11,8 @@ import '../widgets/glass.dart';
 import '../widgets/moto_icon.dart';
 import '../widgets/primary_button.dart';
 import 'camera_screen.dart';
+import 'login_screen.dart';
+import 'scans_screen.dart';
 
 /// Moto de referencia para el resumen de "costo promedio anual" de la
 /// pantalla de inicio: una 150 cc urbana, la más común en Colombia.
@@ -31,16 +34,28 @@ class WelcomeScreen extends StatelessWidget {
     );
   }
 
+  void _openScans(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ScansScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final account = context.watch<AccountState>();
     final referenciaAnual = ExpenseInputs.sugeridoPara(_referencia).total;
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            const MgHeader(title: 'Inicio'),
+            MgHeader(
+              title: 'Inicio',
+              trailing: account.loginAvailable
+                  ? _AccountButton(onOpenScans: () => _openScans(context))
+                  : null,
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -155,6 +170,18 @@ class WelcomeScreen extends StatelessWidget {
                       trailingIcon: Icons.arrow_forward,
                       onPressed: () => _openCamera(context),
                     ),
+                    if (account.scans.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () => _openScans(context),
+                        icon: const Icon(Icons.history),
+                        label: Text(
+                          account.isLoggedIn
+                              ? 'Mis escaneos (${account.scans.length})'
+                              : 'Ver mi último escaneo',
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     Text(
                       'Estimado de referencia, no reemplaza una cotización oficial.',
@@ -166,6 +193,50 @@ class WelcomeScreen extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Esquina superior derecha: "Iniciar sesión" o, con sesión, un menú con
+/// el correo, el historial y cerrar sesión.
+class _AccountButton extends StatelessWidget {
+  final VoidCallback onOpenScans;
+  const _AccountButton({required this.onOpenScans});
+
+  @override
+  Widget build(BuildContext context) {
+    final account = context.watch<AccountState>();
+    final email = account.user?.email;
+
+    if (email == null) {
+      return TextButton.icon(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        ),
+        icon: const Icon(Icons.person_outline, size: 20),
+        label: const Text('Iniciar sesión'),
+      );
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: 'Cuenta',
+      onSelected: (value) {
+        if (value == 'scans') onOpenScans();
+        if (value == 'logout') account.signOut();
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(enabled: false, child: Text(email)),
+        const PopupMenuItem(value: 'scans', child: Text('Mis escaneos')),
+        const PopupMenuItem(value: 'logout', child: Text('Cerrar sesión')),
+      ],
+      child: CircleAvatar(
+        radius: 18,
+        backgroundColor: AppColors.primaryContainer,
+        child: Text(
+          email.characters.first.toUpperCase(),
+          style: AppText.headlineSm.copyWith(color: Colors.white),
         ),
       ),
     );

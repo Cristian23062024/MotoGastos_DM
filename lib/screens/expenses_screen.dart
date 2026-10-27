@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../data/colombia_rates_2026.dart';
 import '../models/expense_inputs.dart';
 import '../models/motorcycle.dart';
+import '../state/account_state.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../utils/currency.dart';
@@ -24,6 +25,43 @@ class ExpensesScreen extends StatefulWidget {
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
   bool _editing = false;
+  Future<void> _lastSave = Future.value();
+
+  @override
+  void initState() {
+    super.initState();
+    // Llegar aquí cierra el escaneo: se guarda (en la cuenta o en el
+    // dispositivo) y se vuelve a guardar al terminar de editar valores.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _save());
+  }
+
+  /// Encadena los guardados para que el segundo use el id que devolvió el
+  /// primero y no inserte un duplicado.
+  Future<void> _save() {
+    final appState = context.read<AppState>();
+    final account = context.read<AccountState>();
+    return _lastSave = _lastSave.then((_) async {
+      final moto = appState.motorcycle;
+      final expenses = appState.expenses;
+      if (moto == null || expenses == null) return;
+      try {
+        appState.scanId =
+            await account.saveScan(moto, expenses, id: appState.scanId);
+      } catch (e) {
+        debugPrint('Error guardando el escaneo: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo guardar el escaneo.')),
+          );
+        }
+      }
+    });
+  }
+
+  void _toggleEditing() {
+    if (_editing) _save();
+    setState(() => _editing = !_editing);
+  }
 
   void _update(AppState appState, ExpenseInputs Function(ExpenseInputs) updater) {
     final current = appState.expenses;
@@ -127,7 +165,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                             const Spacer(),
                             _EditPill(
                               editing: _editing,
-                              onTap: () => setState(() => _editing = !_editing),
+                              onTap: _toggleEditing,
                             ),
                             const SizedBox(width: 4),
                             RoundGlassButton(
@@ -253,7 +291,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                         const SizedBox(height: 16),
                         _SummaryCard(
                           expenses: expenses,
-                          onScanAnother: () {
+                          onScanAnother: () async {
+                            if (_editing) await _save();
+                            if (!context.mounted) return;
                             appState.reset();
                             Navigator.of(context).pushAndRemoveUntil(
                               MaterialPageRoute(builder: (_) => const WelcomeScreen()),

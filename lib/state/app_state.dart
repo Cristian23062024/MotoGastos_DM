@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/expense_inputs.dart';
 import '../models/motorcycle.dart';
+import '../models/saved_scan.dart';
 import '../services/claude_vision_recognition_service.dart';
 import '../services/gemini_vision_recognition_service.dart';
 import '../services/mock_recognition_service.dart';
@@ -50,11 +51,16 @@ class AppState extends ChangeNotifier {
   Motorcycle? motorcycle;
   ExpenseInputs? expenses;
 
+  /// Id del escaneo ya guardado (ver `AccountState.saveScan`), para
+  /// actualizarlo en vez de duplicarlo cuando el usuario edita valores.
+  String? scanId;
+
   RecognitionStatus status = RecognitionStatus.idle;
   String? errorMessage;
 
   void setCapturedImage(File file) {
     capturedImage = file;
+    scanId = null;
     status = RecognitionStatus.idle;
     errorMessage = null;
     notifyListeners();
@@ -118,11 +124,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reabre un escaneo guardado (sin foto) para verlo o editarlo.
+  void openSavedScan(SavedScan scan) {
+    capturedImage = null;
+    motorcycle = scan.motorcycle;
+    expenses = scan.expenses;
+    scanId = scan.id;
+    status = RecognitionStatus.success;
+    errorMessage = null;
+    notifyListeners();
+  }
+
   /// Vuelve al punto de partida para escanear otra moto.
   void reset() {
     capturedImage = null;
     motorcycle = null;
     expenses = null;
+    scanId = null;
     status = RecognitionStatus.idle;
     errorMessage = null;
     notifyListeners();

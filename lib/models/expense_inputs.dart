@@ -52,6 +52,29 @@ class ExpenseInputs {
   /// Equivalente mensual del total anual.
   int get mensual => (total / 12).round();
 
+  Map<String, dynamic> toJson() => {
+        'soat': soat,
+        'tecnomecanica': tecnomecanica,
+        'impuesto': impuesto,
+        'km_anual': kmAnual,
+        'rendimiento_km_por_galon': rendimientoKmPorGalon,
+        'precio_galon': precioGalon,
+        'mantenimiento': mantenimiento,
+      };
+
+  factory ExpenseInputs.fromJson(Map<String, dynamic> json) {
+    int read(String key) => (json[key] as num).round();
+    return ExpenseInputs(
+      soat: read('soat'),
+      tecnomecanica: read('tecnomecanica'),
+      impuesto: read('impuesto'),
+      kmAnual: read('km_anual'),
+      rendimientoKmPorGalon: read('rendimiento_km_por_galon'),
+      precioGalon: read('precio_galon'),
+      mantenimiento: read('mantenimiento'),
+    );
+  }
+
   ExpenseInputs copyWith({
     int? soat,
     int? tecnomecanica,
